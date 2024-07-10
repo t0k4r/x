@@ -58,12 +58,12 @@ func wrap(h http.Handler, middlewares ...MiddlewareFunc) http.Handler {
 	return h
 }
 
-type handler struct {
+type Handler struct {
 	onFunc  HandlerFunc
 	onError ErrorFunc
 }
 
-func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	err := h.onFunc(w, r)
 	if err != nil {
 		h.onError(w, r, err)
@@ -108,7 +108,7 @@ func (mux *ServeMux) HandleFunc(pattern string, handler http.HandlerFunc, middle
 	mux.ServeMux.Handle(pattern, wrap(wrap(handler, mux.middlewares...), middlewares...))
 }
 func (mux *ServeMux) Handlex(pattern string, handlerFunc HandlerFunc, middlewares ...MiddlewareFunc) {
-	mux.ServeMux.Handle(pattern, wrap(wrap(handler{onFunc: handlerFunc, onError: mux.onError}, mux.middlewares...), middlewares...))
+	mux.ServeMux.Handle(pattern, wrap(wrap(Handler{onFunc: handlerFunc, onError: mux.onError}, mux.middlewares...), middlewares...))
 }
 
 func (mux *ServeMux) NewGroup(path string, middlewares ...MiddlewareFunc) *Group {
