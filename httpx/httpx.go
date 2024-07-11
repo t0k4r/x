@@ -89,7 +89,7 @@ func NewServeMux(middlewares ...MiddlewareFunc) *ServeMux {
 	}
 }
 
-// push middleware to middlware stack this middlewares are only applied to rouds addedu sung Handle* methods
+// push middleware to stack this middlewares are only applied to routes added below using Handle* methods
 func (mux *ServeMux) Push(middlewares ...MiddlewareFunc) {
 	mux.middlewares = append(mux.middlewares, middlewares...)
 }
