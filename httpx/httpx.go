@@ -40,6 +40,8 @@ func Json(w http.ResponseWriter, v any, code int) error {
 	return json.NewEncoder(w).Encode(v)
 }
 
+var DefalutOnError ErrorFunc = onError
+
 type ErrorFunc func(http.ResponseWriter, *http.Request, error)
 
 func onError(w http.ResponseWriter, r *http.Request, err error) {
@@ -59,37 +61,33 @@ func wrap(h http.Handler, middlewares ...MiddlewareFunc) http.Handler {
 }
 
 type Handler struct {
-	onFunc  HandlerFunc
-	onError ErrorFunc
+	OnFunc  HandlerFunc
+	OnError ErrorFunc
 }
 
 func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	err := h.onFunc(w, r)
+	err := h.OnFunc(w, r)
 	if err != nil {
-		h.onError(w, r, err)
+		h.OnError(w, r, err)
 	}
 }
 
 type ServeMux struct {
 	http.ServeMux
-	onError     ErrorFunc
+	OnError     ErrorFunc
 	middlewares []MiddlewareFunc
 }
 
 func NewServeMux(middlewares ...MiddlewareFunc) *ServeMux {
 	return &ServeMux{
 		ServeMux:    *http.NewServeMux(),
-		onError:     onError,
+		OnError:     DefalutOnError,
 		middlewares: middlewares,
 	}
 }
 
 func (mux *ServeMux) Add(middlewares ...MiddlewareFunc) {
 	mux.middlewares = append(mux.middlewares, middlewares...)
-}
-
-func (mux *ServeMux) OnError(onError ErrorFunc) {
-	mux.onError = onError
 }
 
 func (mux *ServeMux) With(middlewares ...MiddlewareFunc) http.Handler {
@@ -108,7 +106,7 @@ func (mux *ServeMux) HandleFunc(pattern string, handler http.HandlerFunc, middle
 	mux.ServeMux.Handle(pattern, wrap(wrap(handler, mux.middlewares...), middlewares...))
 }
 func (mux *ServeMux) Handlex(pattern string, handlerFunc HandlerFunc, middlewares ...MiddlewareFunc) {
-	mux.ServeMux.Handle(pattern, wrap(wrap(Handler{onFunc: handlerFunc, onError: mux.onError}, mux.middlewares...), middlewares...))
+	mux.ServeMux.Handle(pattern, wrap(wrap(Handler{OnFunc: handlerFunc, OnError: mux.OnError}, mux.middlewares...), middlewares...))
 }
 
 func (mux *ServeMux) NewGroup(path string, middlewares ...MiddlewareFunc) *Group {
@@ -116,7 +114,7 @@ func (mux *ServeMux) NewGroup(path string, middlewares ...MiddlewareFunc) *Group
 		mux:         mux,
 		path:        path,
 		middlewares: middlewares,
-		onError:     onError,
+		OnError:     mux.OnError,
 	}
 }
 
@@ -124,15 +122,11 @@ type Group struct {
 	mux         *ServeMux
 	path        string
 	middlewares []MiddlewareFunc
-	onError     ErrorFunc
+	OnError     ErrorFunc
 }
 
 func (g *Group) Add(middlewares ...MiddlewareFunc) {
 	g.middlewares = append(g.middlewares, middlewares...)
-}
-
-func (g *Group) OnError(onError ErrorFunc) {
-	g.onError = onError
 }
 
 func (g *Group) Handle(pattern string, handler http.Handler, middlewares ...MiddlewareFunc) {
