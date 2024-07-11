@@ -64,7 +64,7 @@ type Handler struct {
 	OnError ErrorFunc
 }
 
-func (h Handler) With(middlewares ...MiddlewareFunc) http.Handler {
+func (h Handler) Wrap(middlewares ...MiddlewareFunc) http.Handler {
 	return Wrap(h, middlewares...)
 }
 
@@ -89,16 +89,11 @@ func NewServeMux(middlewares ...MiddlewareFunc) *ServeMux {
 	}
 }
 
-// push middleware to stack this middlewares are only applied to routes added below using Handle* methods
-func (mux *ServeMux) Push(middlewares ...MiddlewareFunc) {
+func (mux *ServeMux) Add(middlewares ...MiddlewareFunc) {
 	mux.middlewares = append(mux.middlewares, middlewares...)
 }
 
-// remove last pushed midleware
-func (mux *ServeMux) Pop() {
-	mux.middlewares = mux.middlewares[:len(mux.middlewares)-1]
-}
-func (mux *ServeMux) With(middlewares ...MiddlewareFunc) http.Handler {
+func (mux *ServeMux) Wrap(middlewares ...MiddlewareFunc) http.Handler {
 	return Wrap(mux, middlewares...)
 }
 
@@ -107,8 +102,46 @@ func (mux *ServeMux) Handle(pattern string, handler http.Handler, middlewares ..
 
 }
 func (mux *ServeMux) HandleFunc(pattern string, handler http.HandlerFunc, middlewares ...MiddlewareFunc) {
-	mux.ServeMux.Handle(pattern, Wrap(Wrap(handler, mux.middlewares...), middlewares...))
+	mux.Handle(pattern, handler, middlewares...)
 }
 func (mux *ServeMux) Handlex(pattern string, handlerFunc HandlerFunc, middlewares ...MiddlewareFunc) {
-	mux.ServeMux.Handle(pattern, Wrap(Wrap(Handler{OnFunc: handlerFunc, OnError: mux.OnError}, mux.middlewares...), middlewares...))
+	mux.Handle(pattern, Handler{OnFunc: handlerFunc, OnError: mux.OnError}, middlewares...)
+}
+
+func (mux *ServeMux) With(routes func(*WithHandler), middlewares ...MiddlewareFunc) {
+	routes(&WithHandler{
+		mux:         mux,
+		middlewares: middlewares,
+		OnError:     mux.OnError,
+	})
+}
+
+type WithHandler struct {
+	mux         *ServeMux
+	middlewares []MiddlewareFunc
+	OnError     ErrorFunc
+}
+
+func (wh *WithHandler) Add(middlewares ...MiddlewareFunc) {
+	wh.middlewares = append(wh.middlewares, middlewares...)
+}
+
+func (wh *WithHandler) Handle(pattern string, handler http.Handler, middlewares ...MiddlewareFunc) {
+	wh.mux.Handle(pattern, Wrap(handler, wh.middlewares...), middlewares...)
+}
+
+func (wh *WithHandler) HandleFunc(pattern string, handler http.HandlerFunc, middlewares ...MiddlewareFunc) {
+	wh.Handle(pattern, handler, middlewares...)
+}
+
+func (wh *WithHandler) Handlex(pattern string, handler HandlerFunc, middlewares ...MiddlewareFunc) {
+	wh.Handle(pattern, Handler{OnFunc: handler, OnError: wh.OnError}, middlewares...)
+}
+
+func (wh *WithHandler) With(routes func(*WithHandler), middlewares ...MiddlewareFunc) {
+	routes(&WithHandler{
+		mux:         wh.mux,
+		middlewares: wh.middlewares,
+		OnError:     wh.OnError,
+	})
 }
