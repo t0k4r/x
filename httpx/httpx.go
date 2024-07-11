@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 )
 
 func NoContent(w http.ResponseWriter, code int) error {
@@ -53,7 +52,7 @@ type HandlerFunc func(http.ResponseWriter, *http.Request) error
 
 type MiddlewareFunc func(http.Handler) http.Handler
 
-func wrap(h http.Handler, middlewares ...MiddlewareFunc) http.Handler {
+func Wrap(h http.Handler, middlewares ...MiddlewareFunc) http.Handler {
 	for _, mid := range middlewares {
 		h = mid(h)
 	}
@@ -63,6 +62,10 @@ func wrap(h http.Handler, middlewares ...MiddlewareFunc) http.Handler {
 type Handler struct {
 	OnFunc  HandlerFunc
 	OnError ErrorFunc
+}
+
+func (h Handler) With(middlewares ...MiddlewareFunc) http.Handler {
+	return Wrap(h, middlewares...)
 }
 
 func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -86,63 +89,26 @@ func NewServeMux(middlewares ...MiddlewareFunc) *ServeMux {
 	}
 }
 
-func (mux *ServeMux) Add(middlewares ...MiddlewareFunc) {
+// push middleware to middlware stack this middlewares are only applied to rouds addedu sung Handle* methods
+func (mux *ServeMux) Push(middlewares ...MiddlewareFunc) {
 	mux.middlewares = append(mux.middlewares, middlewares...)
 }
 
+// remove last pushed midleware
+func (mux *ServeMux) Pop() {
+	mux.middlewares = mux.middlewares[:len(mux.middlewares)-1]
+}
 func (mux *ServeMux) With(middlewares ...MiddlewareFunc) http.Handler {
-	var httph http.Handler = mux
-	for _, mid := range middlewares {
-		httph = mid(httph)
-	}
-	return httph
+	return Wrap(mux, middlewares...)
 }
 
 func (mux *ServeMux) Handle(pattern string, handler http.Handler, middlewares ...MiddlewareFunc) {
-	mux.ServeMux.Handle(pattern, wrap(wrap(handler, mux.middlewares...), middlewares...))
+	mux.ServeMux.Handle(pattern, Wrap(Wrap(handler, mux.middlewares...), middlewares...))
 
 }
 func (mux *ServeMux) HandleFunc(pattern string, handler http.HandlerFunc, middlewares ...MiddlewareFunc) {
-	mux.ServeMux.Handle(pattern, wrap(wrap(handler, mux.middlewares...), middlewares...))
+	mux.ServeMux.Handle(pattern, Wrap(Wrap(handler, mux.middlewares...), middlewares...))
 }
 func (mux *ServeMux) Handlex(pattern string, handlerFunc HandlerFunc, middlewares ...MiddlewareFunc) {
-	mux.ServeMux.Handle(pattern, wrap(wrap(Handler{OnFunc: handlerFunc, OnError: mux.OnError}, mux.middlewares...), middlewares...))
-}
-
-func (mux *ServeMux) NewGroup(path string, middlewares ...MiddlewareFunc) *Group {
-	return &Group{
-		mux:         mux,
-		path:        path,
-		middlewares: middlewares,
-		OnError:     mux.OnError,
-	}
-}
-
-type Group struct {
-	mux         *ServeMux
-	path        string
-	middlewares []MiddlewareFunc
-	OnError     ErrorFunc
-}
-
-func (g *Group) Add(middlewares ...MiddlewareFunc) {
-	g.middlewares = append(g.middlewares, middlewares...)
-}
-
-func (g *Group) Handle(pattern string, handler http.Handler, middlewares ...MiddlewareFunc) {
-	g.mux.Handle(pattern, wrap(wrap(handler, g.middlewares...), middlewares...))
-
-}
-func (g *Group) HandleFunc(pattern string, handler http.HandlerFunc, middlewares ...MiddlewareFunc) {
-	g.mux.Handle(pattern, wrap(wrap(handler, g.middlewares...), middlewares...))
-}
-
-func (g *Group) Handlex(pattern string, handler HandlerFunc, middlewares ...MiddlewareFunc) {
-	method := ""
-	split := strings.Split(pattern, " ")
-	if len(split) == 2 {
-		method = split[0]
-		pattern = split[1]
-	}
-	g.mux.Handlex(fmt.Sprintf("%v %v%v", method, g.path, pattern), handler, append(g.middlewares, middlewares...)...)
+	mux.ServeMux.Handle(pattern, Wrap(Wrap(Handler{OnFunc: handlerFunc, OnError: mux.OnError}, mux.middlewares...), middlewares...))
 }
