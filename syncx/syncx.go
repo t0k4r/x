@@ -25,10 +25,18 @@ func (m *Map[K, V]) Delete(key K) {
 }
 func (m *Map[K, V]) Load(key K) (value V, ok bool) {
 	v, ok := m.Map.Load(key)
+	if !ok {
+		var tmp V
+		return tmp, ok
+	}
 	return v.(V), ok
 }
 func (m *Map[K, V]) LoadAndDelete(key K) (value V, loaded bool) {
 	v, loaded := m.Map.LoadAndDelete(key)
+	if !loaded {
+		var tmp V
+		return tmp, loaded
+	}
 	return v.(V), loaded
 }
 func (m *Map[K, V]) LoadOrStore(key K, value V) (actual V, loaded bool) {
@@ -45,5 +53,9 @@ func (m *Map[K, V]) Store(key K, value V) {
 }
 func (m *Map[K, V]) Swap(key K, value V) (previous V, loaded bool) {
 	p, loaded := m.Map.Swap(key, value)
+	if !loaded {
+		var tmp V
+		return tmp, loaded
+	}
 	return p.(V), loaded
 }
