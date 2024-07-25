@@ -7,8 +7,10 @@ import (
 	"net/http"
 )
 
-func LogErr(r *http.Request, err error) {
+func ErrorLog(w http.ResponseWriter, r *http.Request, err error, msg string, code int) error {
 	slog.Error(err.Error(), "path", r.URL.Path)
+	http.Error(w, msg, code)
+	return nil
 }
 
 func Json(w http.ResponseWriter, v any, code int) error {
@@ -47,7 +49,7 @@ func (hf HandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	err := hf(w, r)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		LogErr(r, err)
+		slog.Error(err.Error(), "path", r.URL.Path)
 	}
 }
 
