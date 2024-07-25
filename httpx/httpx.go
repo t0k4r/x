@@ -43,7 +43,7 @@ func Error(w http.ResponseWriter, err error, code int) error {
 
 type HandlerFunc func(http.ResponseWriter, *http.Request) error
 
-func (hf HandlerFunc) ServeHttp(w http.ResponseWriter, r *http.Request) {
+func (hf HandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	err := hf(w, r)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -71,10 +71,10 @@ func NewServeMux() *ServeMux {
 func (mux *ServeMux) Handle(pattern string, handler http.Handler, middlewares ...MiddlewareFunc) {
 	mux.ServeMux.Handle(pattern, wrap(handler, middlewares...))
 }
-func (mux *ServeMux) HandleFunc(pattern string, handler http.Handler, middlewares ...MiddlewareFunc) {
+func (mux *ServeMux) HandleFunc(pattern string, handler http.HandlerFunc, middlewares ...MiddlewareFunc) {
 	mux.Handle(pattern, handler, middlewares...)
 }
-func (mux *ServeMux) Handlex(pattern string, handler http.Handler, middlewares ...MiddlewareFunc) {
+func (mux *ServeMux) Handlex(pattern string, handler HandlerFunc, middlewares ...MiddlewareFunc) {
 	mux.Handle(pattern, handler, middlewares...)
 }
 
