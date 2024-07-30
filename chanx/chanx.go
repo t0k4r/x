@@ -49,18 +49,17 @@ func (u *Uniq[T]) Wait() {
 
 func (u *Uniq[T]) Close() {
 	close(u.in)
+	close(u.out)
 }
 
 func (u *Uniq[T]) Send(items ...T) {
 	u.wg.Add(1)
 	for _, item := range items {
-		u.wg.Add(1)
 		u.in <- item
 	}
 	u.wg.Done()
 }
 func (u *Uniq[T]) Recv() (T, bool) {
 	data, ok := <-u.out
-	u.wg.Done()
 	return data, ok
 }
