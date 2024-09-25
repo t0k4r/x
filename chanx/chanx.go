@@ -1,65 +1,36 @@
 package chanx
 
 import (
-	"slices"
-	"sync"
+	"iter"
+
+	"github.com/t0k4r/x/iterx"
 )
 
-type Uniq[T comparable] struct {
-	in   chan T
-	out  chan T
-	done []T
-	wg   *sync.WaitGroup
-}
-
-func NewUniq[T comparable]() Uniq[T] {
-	u := Uniq[T]{
-		in:   make(chan T),
-		out:  make(chan T),
-		done: []T{},
-		wg:   &sync.WaitGroup{},
-	}
-	go u.run()
-	return u
-}
-func NewUniqSized[T comparable](size int) Uniq[T] {
-	u := Uniq[T]{
-		in:   make(chan T, size),
-		out:  make(chan T, size),
-		done: []T{},
-		wg:   &sync.WaitGroup{},
-	}
-	go u.run()
-	return u
-}
-
-func (u *Uniq[T]) run() {
-	for data := range u.in {
-		if !slices.Contains(u.done, data) {
-			u.done = append(u.done, data)
-			u.out <- data
+func All[T any](c chan T) iter.Seq[T] {
+	return func(yield func(T) bool) {
+		for item := range c {
+			if !yield(item) {
+				break
+			}
 		}
 	}
-	close(u.out)
 }
-
-func (u *Uniq[T]) Wait() {
-	u.wg.Wait()
+func Some[T any](c chan T, filter func(T) bool) iter.Seq[T] {
+	return iterx.Filter(All(c), filter)
 }
-
-func (u *Uniq[T]) Close() {
-	close(u.in)
-	close(u.out)
+func Transform[In, Out any](c chan In, mapf func(In) Out) iter.Seq[Out] {
+	return iterx.Map(All(c), mapf)
 }
-
-func (u *Uniq[T]) Send(items ...T) {
-	u.wg.Add(1)
-	for _, item := range items {
-		u.in <- item
-	}
-	u.wg.Done()
+func Uniq[T comparable](c chan T) iter.Seq[T] {
+	return iterx.Uniq(All(c))
 }
-func (u *Uniq[T]) Recv() (T, bool) {
-	data, ok := <-u.out
-	return data, ok
+func Collect[T any](it iter.Seq[T]) chan T {
+	c := make(chan T)
+	go func() {
+		for item := range it {
+			c <- item
+		}
+		close(c)
+	}()
+	return c
 }

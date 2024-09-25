@@ -20,17 +20,17 @@ func Json(w http.ResponseWriter, v any, code int) error {
 }
 
 func Text(w http.ResponseWriter, text string, code int) error {
-	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("content-type", "text/plain")
 	w.WriteHeader(code)
-	fmt.Fprint(w, text)
-	return nil
+	_, err := fmt.Fprint(w, text)
+	return err
 }
 
 func Html(w http.ResponseWriter, html string, code int) error {
-	w.Header().Set("Content-Type", "text/html")
+	w.Header().Set("content-type", "text/html")
 	w.WriteHeader(code)
-	fmt.Fprint(w, html)
-	return nil
+	_, err := fmt.Fprint(w, html)
+	return err
 }
 
 func Empty(w http.ResponseWriter, code int) error {

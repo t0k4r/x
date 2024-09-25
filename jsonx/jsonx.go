@@ -6,33 +6,26 @@ import (
 	"io"
 )
 
-var ErrJson = errors.New("jsonx: error with json")
 var ErrCheck = errors.New("jsonx: check failed")
 
 type Checker interface {
 	Check() error
 }
 
-func DecodeCheck[T Checker](r io.Reader) (T, error) {
-	var item T
-	err := json.NewDecoder(r).Decode(&item)
-	if err != nil {
-		return item, errors.Join(ErrJson, err)
+func DecodeCheck[T Checker](r io.Reader) (item T, err error) {
+	if err = json.NewDecoder(r).Decode(&item); err != nil {
+		return item, err
 	}
-	err = item.Check()
-	if err != nil {
+	if err = item.Check(); err != nil {
 		return item, errors.Join(ErrCheck, err)
 	}
 	return item, nil
 }
-func DecodeCheckFunc[T any](r io.Reader, checker func(T) error) (T, error) {
-	var item T
-	err := json.NewDecoder(r).Decode(&item)
-	if err != nil {
-		return item, errors.Join(ErrJson, err)
+func DecodeCheckFunc[T any](r io.Reader, checker func(T) error) (item T, err error) {
+	if err = json.NewDecoder(r).Decode(&item); err != nil {
+		return item, err
 	}
-	err = checker(item)
-	if err != nil {
+	if err = checker(item); err != nil {
 		return item, errors.Join(ErrCheck, err)
 	}
 	return item, nil
