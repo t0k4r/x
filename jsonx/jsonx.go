@@ -2,31 +2,36 @@ package jsonx
 
 import (
 	"encoding/json"
-	"errors"
 	"io"
 )
 
-var ErrCheck = errors.New("jsonx: check failed")
-
-type Checker interface {
-	Check() error
+type Item interface {
+	Validate() error
 }
 
-func DecodeCheck[T Checker](r io.Reader) (item T, err error) {
-	if err = json.NewDecoder(r).Decode(&item); err != nil {
-		return item, err
+func Unmarshall[T Item](bytes []byte, item *T) error {
+	if err := json.Unmarshal(bytes, item); err != nil {
+		return err
 	}
-	if err = item.Check(); err != nil {
-		return item, errors.Join(ErrCheck, err)
-	}
-	return item, nil
+	return (*item).Validate()
 }
-func DecodeCheckFunc[T any](r io.Reader, checker func(T) error) (item T, err error) {
-	if err = json.NewDecoder(r).Decode(&item); err != nil {
-		return item, err
+
+type Decoder[T Item] struct {
+	*json.Decoder
+}
+
+func NewDecoder[T Item](r io.Reader) *Decoder[T] {
+	return &Decoder[T]{Decoder: json.NewDecoder(r)}
+}
+func (d *Decoder[T]) Decode(item *T) error {
+	if err := d.Decoder.Decode(item); err != nil {
+		return err
 	}
-	if err = checker(item); err != nil {
-		return item, errors.Join(ErrCheck, err)
-	}
-	return item, nil
+	return (*item).Validate()
+}
+
+func Read[T Item](r io.Reader) (T, error) {
+	var item T
+	err := NewDecoder[T](r).Decode(&item)
+	return item, err
 }

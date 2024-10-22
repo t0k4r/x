@@ -5,12 +5,19 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
+	"sync/atomic"
+	"time"
 )
 
-func ErrorLog(w http.ResponseWriter, r *http.Request, err error, msg string, code int) error {
-	slog.Error(err.Error(), "path", r.URL.Path)
-	http.Error(w, msg, code)
-	return nil
+// log HandlerFunc error as Debug Logger middleware as Info and REcoverer as Error
+var defaultLogger atomic.Pointer[slog.Logger]
+
+func init() {
+	defaultLogger.Store(slog.Default())
+}
+func SetLogger(l *slog.Logger) {
+	defaultLogger.Store(l)
 }
 
 func Json(w http.ResponseWriter, v any, code int) error {
@@ -19,67 +26,78 @@ func Json(w http.ResponseWriter, v any, code int) error {
 	return json.NewEncoder(w).Encode(v)
 }
 
-func Text(w http.ResponseWriter, text string, code int) error {
+func Plain(w http.ResponseWriter, text string, code int) error {
 	w.Header().Set("content-type", "text/plain")
 	w.WriteHeader(code)
 	_, err := fmt.Fprint(w, text)
 	return err
 }
 
-func Html(w http.ResponseWriter, html string, code int) error {
-	w.Header().Set("content-type", "text/html")
-	w.WriteHeader(code)
-	_, err := fmt.Fprint(w, html)
-	return err
-}
-
-func Empty(w http.ResponseWriter, code int) error {
+func NoContent(w http.ResponseWriter, code int) error {
 	w.WriteHeader(code)
 	return nil
 }
 
 func Error(w http.ResponseWriter, err error, code int) error {
 	http.Error(w, err.Error(), code)
-	return nil
+	return err
+}
+
+type funcResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+	header     bool
+}
+
+func (rw *funcResponseWriter) WriteHeader(statusCode int) {
+	rw.WriteHeader(statusCode)
+	rw.statusCode = statusCode
+	rw.header = true
 }
 
 type HandlerFunc func(http.ResponseWriter, *http.Request) error
 
 func (hf HandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	err := hf(w, r)
+	rw := &funcResponseWriter{ResponseWriter: w}
+	err := hf(rw, r)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		slog.Error(err.Error(), "path", r.URL.Path)
+		if !rw.header {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		defaultLogger.Load().DebugContext(r.Context(), r.URL.Path, "code", rw.statusCode, "error", err.Error())
 	}
 }
 
-type MiddlewareFunc func(http.Handler) http.Handler
+func Func(h HandlerFunc) http.Handler { return h }
 
-func wrap(h http.Handler, middlewares ...MiddlewareFunc) http.Handler {
-	for _, mid := range middlewares {
-		h = mid(h)
-	}
-	return h
-}
-
-type ServeMux struct {
-	http.ServeMux
-}
-
-func NewServeMux() *ServeMux {
-	return &ServeMux{ServeMux: *http.NewServeMux()}
+func Recoverer(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				defaultLogger.Load().ErrorContext(r.Context(), r.URL.Path, "panic", fmt.Sprint(rec), "stack", debug.Stack())
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
 }
 
-func (mux *ServeMux) Handle(pattern string, handler http.Handler, middlewares ...MiddlewareFunc) {
-	mux.ServeMux.Handle(pattern, wrap(handler, middlewares...))
-}
-func (mux *ServeMux) HandleFunc(pattern string, handler http.HandlerFunc, middlewares ...MiddlewareFunc) {
-	mux.Handle(pattern, handler, middlewares...)
-}
-func (mux *ServeMux) Handlex(pattern string, handler HandlerFunc, middlewares ...MiddlewareFunc) {
-	mux.Handle(pattern, handler, middlewares...)
+type logResponseWriter struct {
+	http.ResponseWriter
+	now        time.Time
+	statusCode int
 }
 
-func ListenAndServe(addr string, handler http.Handler, middlewares ...MiddlewareFunc) error {
-	return http.ListenAndServe(addr, wrap(handler, middlewares...))
+func (rw *logResponseWriter) WriteHeader(statusCode int) {
+	rw.WriteHeader(statusCode)
+	rw.statusCode = statusCode
+}
+
+func Logger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rw := &logResponseWriter{ResponseWriter: w, now: time.Now(), statusCode: http.StatusOK}
+		next.ServeHTTP(rw, r)
+		defaultLogger.Load().InfoContext(r.Context(), r.URL.Path, "code", rw.statusCode, "time", time.Since(rw.now))
+	})
+
 }

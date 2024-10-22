@@ -1,17 +1,12 @@
 package syncx
 
 import (
+	"iter"
 	"sync"
 )
 
-type Map[K, V any] struct {
+type Map[K comparable, V any] struct {
 	sync.Map
-}
-
-func NewMap[K, V any]() *Map[K, V] {
-	return &Map[K, V]{
-		Map: sync.Map{},
-	}
 }
 
 func (m *Map[K, V]) CompareAndDelete(key K, old V) (deleted bool) {
@@ -24,38 +19,55 @@ func (m *Map[K, V]) Delete(key K) {
 	m.Map.Delete(key)
 }
 func (m *Map[K, V]) Load(key K) (value V, ok bool) {
-	var tmp any
-	tmp, ok = m.Map.Load(key)
+	tmp, ok := m.Map.Load(key)
 	if !ok {
 		value = tmp.(V)
 	}
-	return
+	return value, ok
 }
 func (m *Map[K, V]) LoadAndDelete(key K) (value V, loaded bool) {
-	var tmp any
-	tmp, loaded = m.Map.LoadAndDelete(key)
+	tmp, loaded := m.Map.LoadAndDelete(key)
 	if !loaded {
 		value = tmp.(V)
 	}
-	return
+	return value, loaded
 }
 func (m *Map[K, V]) LoadOrStore(key K, value V) (actual V, loaded bool) {
-	a, loaded := m.Map.LoadOrStore(key, value)
-	return a.(V), loaded
-}
-func (m *Map[K, V]) Range(f func(key K, value V) bool) {
-	m.Map.Range(func(key, value any) bool {
-		return f(key.(K), value.(V))
-	})
+	tmp, loaded := m.Map.LoadOrStore(key, value)
+	if !loaded {
+		actual = tmp.(V)
+	}
+	return actual, loaded
 }
 func (m *Map[K, V]) Store(key K, value V) {
 	m.Map.Store(key, value)
 }
 func (m *Map[K, V]) Swap(key K, value V) (previous V, loaded bool) {
-	var tmp any
-	tmp, loaded = m.Map.Swap(key, value)
+	tmp, loaded := m.Map.Swap(key, value)
 	if loaded {
 		previous = tmp.(V)
 	}
-	return
+	return previous, loaded
+}
+func (m *Map[K, V]) All() iter.Seq2[K, V] {
+	return func(yield func(K, V) bool) {
+		m.Map.Range(func(key, value any) bool {
+			return yield(key.(K), value.(V))
+		})
+	}
+}
+
+func (m *Map[K, V]) Keys() iter.Seq[K] {
+	return func(yield func(K) bool) {
+		m.Map.Range(func(key, value any) bool {
+			return yield(key.(K))
+		})
+	}
+}
+func (m *Map[K, V]) Values() iter.Seq[V] {
+	return func(yield func(V) bool) {
+		m.Map.Range(func(key, value any) bool {
+			return yield(value.(V))
+		})
+	}
 }
