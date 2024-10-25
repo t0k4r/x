@@ -68,7 +68,14 @@ func (hf HandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func Func(h HandlerFunc) http.Handler { return h }
+type MiddlewareFunc func(http.Handler) http.Handler
+
+func Wrap(handler http.Handler, middlewares ...MiddlewareFunc) http.Handler {
+	for _, mid := range middlewares {
+		handler = mid(handler)
+	}
+	return handler
+}
 
 func Recoverer(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -100,4 +107,15 @@ func Logger(next http.Handler) http.Handler {
 		defaultLogger.Load().InfoContext(r.Context(), r.URL.Path, "code", rw.statusCode, "time", time.Since(rw.now))
 	})
 
+}
+
+type ServeMux struct {
+	*http.ServeMux
+}
+
+func NewServeMux() ServeMux {
+	return ServeMux{http.NewServeMux()}
+}
+func (mux ServeMux) HandleFunc(pattern string, handler HandlerFunc, middlewares ...MiddlewareFunc) {
+	mux.Handle(pattern, Wrap(handler, middlewares...))
 }

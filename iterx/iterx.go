@@ -2,7 +2,6 @@ package iterx
 
 import (
 	"iter"
-	"slices"
 )
 
 func Map[In, Out any](it iter.Seq[In], mapf func(In) Out) iter.Seq[Out] {
@@ -49,12 +48,12 @@ func Filter2[K, V any](it iter.Seq2[K, V], filter func(K, V) bool) iter.Seq2[K, 
 }
 func Uniq[T comparable](it iter.Seq[T]) iter.Seq[T] {
 	return func(yield func(T) bool) {
-		var items []T
+		items := map[T]any{}
 		for item := range it {
-			if slices.Contains(items, item) {
+			if _, ok := items[item]; ok {
 				continue
 			}
-			items = append(items, item)
+			items[item] = nil
 			if !yield(item) {
 				break
 			}

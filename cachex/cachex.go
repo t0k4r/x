@@ -19,8 +19,7 @@ type item[T any] struct {
 
 func (c *Cache[K, V]) Delete(key K) (value V, loaded bool) {
 	var it item[V]
-	if it, loaded = c.mp.Load(key); loaded {
-		c.mp.Delete(key)
+	if it, loaded = c.mp.LoadAndDelete(key); loaded {
 		it.timer.Stop()
 		value = it.value
 	}
@@ -36,12 +35,13 @@ func (c *Cache[K, V]) Load(key K) (value V, ok bool) {
 }
 
 func (c *Cache[K, V]) Store(key K, value V, duration time.Duration) (previous V, loaded bool) {
-	var it item[V]
-	if it, loaded = c.mp.Load(key); loaded {
-		it.timer.Stop()
-		previous = it.value
+	var oldIt item[V]
+	newIt := item[V]{value, time.AfterFunc(duration, func() { c.mp.Delete(key) })}
+	if oldIt, loaded = c.mp.LoadOrStore(key, newIt); loaded {
+		oldIt.timer.Stop()
+		previous = oldIt.value
+		c.mp.Swap(key, newIt)
 	}
-	c.mp.Store(key, item[V]{value, time.AfterFunc(duration, func() { c.mp.Delete(key) })})
 	return previous, loaded
 }
 func (c *Cache[K, V]) All() iter.Seq2[K, V] {
