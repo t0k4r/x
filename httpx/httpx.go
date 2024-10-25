@@ -50,7 +50,7 @@ type funcResponseWriter struct {
 }
 
 func (rw *funcResponseWriter) WriteHeader(statusCode int) {
-	rw.WriteHeader(statusCode)
+	rw.ResponseWriter.WriteHeader(statusCode)
 	rw.statusCode = statusCode
 	rw.header = true
 }
@@ -96,7 +96,7 @@ type logResponseWriter struct {
 }
 
 func (rw *logResponseWriter) WriteHeader(statusCode int) {
-	rw.WriteHeader(statusCode)
+	rw.ResponseWriter.WriteHeader(statusCode)
 	rw.statusCode = statusCode
 }
 
